@@ -115,8 +115,28 @@ class NFCPlugin : Plugin() {
             addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
 
+        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_MUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+
+        var activityOptionsBundle: Bundle? = null
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE_MR0) { // API 35 (Android 15)
+            activityOptionsBundle = ActivityOptions.makeBasic().apply {
+                setPendingIntentCreatorBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+            }.toBundle()
+        }
+
         val pendingIntent =
-            PendingIntent.getActivity(this.activity, 0, intent, PendingIntent.FLAG_MUTABLE)
+            PendingIntent.getActivity(
+                this.activity,
+                0,
+                intent,
+                pendingIntentFlags,
+                activityOptionsBundle
+            )
 
         val intentFilter: Array<IntentFilter> =
             arrayOf(
