@@ -1,5 +1,6 @@
 package com.exxili.capacitornfc
 
+import android.app.ActivityOptions
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.IntentFilter
@@ -22,7 +23,10 @@ import android.nfc.tech.NfcB
 import android.nfc.tech.NfcBarcode
 import android.nfc.tech.NfcF
 import android.nfc.tech.NfcV
+import android.os.Build
+import android.os.Bundle
 import android.util.Log
+import androidx.annotation.RequiresApi
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -53,6 +57,7 @@ class NFCPlugin : Plugin() {
         NfcV::class.java.name
     ))
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     public override fun handleOnNewIntent(intent: Intent?) {
         super.handleOnNewIntent(intent)
 
@@ -68,7 +73,7 @@ class NFCPlugin : Plugin() {
         }
         else if (ACTION_NDEF_DISCOVERED == intent.action) {
             Log.d("NFC", "READ MODE START")
-             handleReadTag(intent)
+            handleReadTag(intent)
         }
     }
 
@@ -123,7 +128,7 @@ class NFCPlugin : Plugin() {
 
         var activityOptionsBundle: Bundle? = null
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE_MR0) { // API 35 (Android 15)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API 35 (Android 15)
             activityOptionsBundle = ActivityOptions.makeBasic().apply {
                 setPendingIntentCreatorBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
             }.toBundle()
@@ -159,6 +164,7 @@ class NFCPlugin : Plugin() {
         )
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun handleWriteTag(intent: Intent) {
         val records = recordsBuffer?.toList<JSONObject>()
         if(records != null) {
@@ -304,6 +310,7 @@ class NFCPlugin : Plugin() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun handleReadTag(intent: Intent) {
         val jsResponse = JSObject()
 
