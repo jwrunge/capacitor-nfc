@@ -18,18 +18,36 @@ export * from './definitions';
 export const NFC: NFCPlugin = {
   isSupported: NFCPlug.isSupported.bind(NFCPlug),
   startScan: NFCPlug.startScan.bind(NFCPlug),
-  cancelScan: NFCPlug.cancelScan?.bind(NFCPlug) ?? (async () => { /* Android no-op */ }),
+  cancelScan:
+    NFCPlug.cancelScan?.bind(NFCPlug) ??
+    (async () => {
+      /* Android no-op */
+    }),
   cancelWriteAndroid: NFCPlug.cancelWriteAndroid.bind(NFCPlug),
   onRead: (func: TagResultListenerFunc) => {
-    NFC.wrapperListeners.push(func)
+    NFC.wrapperListeners.push(func);
     // Return unsubscribe function
     return () => {
-      NFC.wrapperListeners = NFC.wrapperListeners.filter(l => l !== func)
-    }
+      NFC.wrapperListeners = NFC.wrapperListeners.filter((l) => l !== func);
+    };
   },
-  onWrite: (func: () => void) => NFCPlug.addListener(`nfcWriteSuccess`, func),
+  onWrite: (func: () => void) => {
+    let handle: any;
+    NFCPlug.addListener(`nfcWriteSuccess`, func).then((h) => (handle = h));
+    return () => {
+      try {
+        handle?.remove?.();
+      } catch {}
+    };
+  },
   onError: (errorFn: (error: NFCError) => void) => {
-    NFCPlug.addListener(`nfcError`, errorFn);
+    let handle: any;
+    NFCPlug.addListener(`nfcError`, errorFn).then((h) => (handle = h));
+    return () => {
+      try {
+        handle?.remove?.();
+      } catch {}
+    };
   },
   removeAllListeners: (eventName: 'nfcTag' | 'nfcError') => {
     NFC.wrapperListeners = [];
