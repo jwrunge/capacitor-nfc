@@ -20,7 +20,13 @@ export const NFC: NFCPlugin = {
   startScan: NFCPlug.startScan.bind(NFCPlug),
   cancelScan: NFCPlug.cancelScan?.bind(NFCPlug) ?? (async () => { /* Android no-op */ }),
   cancelWriteAndroid: NFCPlug.cancelWriteAndroid.bind(NFCPlug),
-  onRead: (func: TagResultListenerFunc) => NFC.wrapperListeners.push(func),
+  onRead: (func: TagResultListenerFunc) => {
+    NFC.wrapperListeners.push(func)
+    // Return unsubscribe function
+    return () => {
+      NFC.wrapperListeners = NFC.wrapperListeners.filter(l => l !== func)
+    }
+  },
   onWrite: (func: () => void) => NFCPlug.addListener(`nfcWriteSuccess`, func),
   onError: (errorFn: (error: NFCError) => void) => {
     NFCPlug.addListener(`nfcError`, errorFn);

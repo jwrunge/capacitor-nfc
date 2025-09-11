@@ -108,7 +108,10 @@ export type TagResultListenerFunc = (data: NDEFMessagesTransformable) => void
 export interface NFCPlugin extends Omit<NFCPluginBasic, "writeNDEF" | "addListener"> {
   writeNDEF: <T extends PayloadType = Uint8Array>(record?: NDEFWriteOptions<T>) => Promise<void>;
   wrapperListeners: TagResultListenerFunc[],
-  onRead: (listenerFunc: TagResultListenerFunc)=> void,
+  /**
+   * Register a read listener. Returns an unsubscribe function to remove just this listener.
+   */
+  onRead: (listenerFunc: TagResultListenerFunc)=> (()=> void),
   onWrite: (listenerFunc: ()=> void) => void,
   onError: (listenerFunc: (error: NFCError)=> void)=> void,
 }
