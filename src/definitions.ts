@@ -12,6 +12,11 @@ export interface NFCPluginBasic {
   startScan(): Promise<void>;
 
   /**
+   * Cancels an ongoing scan session (iOS only currently; no-op / rejection on Android).
+   */
+  cancelScan(): Promise<void>;
+
+  /**
    * Writes an NDEF message to an NFC tag.
    * @param options The NDEF message to write.
    */

@@ -19,6 +19,13 @@ import CoreNFC
         readerSession?.begin()
     }
 
+    @objc public func cancelScanning() {
+        if let session = readerSession {
+            session.invalidate()
+        }
+        readerSession = nil
+    }
+
     // NFCNDEFReaderSessionDelegate methods for reading
     public func readerSession(_ session: NFCNDEFReaderSession, didInvalidateWithError error: Error) {
         print("NFC reader session error: \(error.localizedDescription)")

@@ -10,6 +10,7 @@ public class NFCPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "isSupported", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancelWriteAndroid", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "startScan", returnType: CAPPluginReturnPromise),
+    CAPPluginMethod(name: "cancelScan", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "writeNDEF", returnType: CAPPluginReturnPromise)
     ]
 
@@ -55,6 +56,11 @@ public class NFCPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         reader.startScanning()
+        call.resolve()
+    }
+
+    @objc func cancelScan(_ call: CAPPluginCall) {
+        reader.cancelScanning()
         call.resolve()
     }
 
