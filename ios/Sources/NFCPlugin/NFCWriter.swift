@@ -48,33 +48,28 @@ import CoreNFC
 
         session.connect(to: tag) { (error) in
             if let error = error {
-                session.alertMessage = "Unable to connect to tag."
-                session.invalidate()
+                session.invalidate(errorMessage: "Unable to connect to tag.")
                 self.onError?(error)
                 return
             }
 
             tag.queryNDEFStatus { (ndefStatus, capacity, error) in
                 if let error = error {
-                    session.alertMessage = "Unable to query the NDEF status of tag."
-                    session.invalidate()
+                    session.invalidate(errorMessage: "Unable to query the NDEF status of tag.")
                     self.onError?(error)
                     return
                 }
 
                 switch ndefStatus {
                 case .notSupported:
-                    session.alertMessage = "Tag is not NDEF compliant."
-                    session.invalidate()
+                    session.invalidate(errorMessage: "Tag is not NDEF compliant.")
                 case .readOnly:
-                    session.alertMessage = "Tag is read-only."
-                    session.invalidate()
+                    session.invalidate(errorMessage: "Tag is read-only.")
                 case .readWrite:
                     if let message = self.messageToWrite {
                         tag.writeNDEF(message) { (error) in
                             if let error = error {
-                                session.alertMessage = "Failed to write NDEF message."
-                                session.invalidate()
+                                session.invalidate(errorMessage: "Failed to write NDEF message.")
                                 self.onError?(error)
                                 return
                             }
@@ -83,12 +78,10 @@ import CoreNFC
                             self.onWriteSuccess?()
                         }
                     } else {
-                        session.alertMessage = "No message to write."
-                        session.invalidate()
+                        session.invalidate(errorMessage: "No message to write.")
                     }
                 @unknown default:
-                    session.alertMessage = "Unknown NDEF tag status."
-                    session.invalidate()
+                    session.invalidate(errorMessage: "Unknown NDEF tag status.")
                 }
             }
         }

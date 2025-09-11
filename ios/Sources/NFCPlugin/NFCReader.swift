@@ -49,23 +49,20 @@ import CoreNFC
         let tag = tags.first!
         session.connect(to: tag) { (error: Error?) in
             if let error = error {
-                session.alertMessage = "Unable to connect to tag."
-                session.invalidate()
+                session.invalidate(errorMessage: "Unable to connect to tag.")
                 self.onError?(error)
                 return
             }
             
             tag.queryNDEFStatus { (ndefStatus: NFCNDEFStatus, capacity: Int, error: Error?) in
                 if let error = error {
-                    session.alertMessage = "Unable to query NDEF status of tag."
-                    session.invalidate()
+                    session.invalidate(errorMessage: "Unable to query NDEF status of tag.")
                     self.onError?(error)
                     return
                 }
                 
                 if ndefStatus == .notSupported {
-                    session.alertMessage = "Tag is not NDEF compliant."
-                    session.invalidate()
+                    session.invalidate(errorMessage: "Tag is not NDEF compliant.")
                     return
                 }
                 
@@ -73,8 +70,7 @@ import CoreNFC
                     var statusMessage: String
                     if let error = error {
                         statusMessage = "Failed to read NDEF from tag."
-                        session.alertMessage = statusMessage
-                        session.invalidate()
+                        session.invalidate(errorMessage: statusMessage)
                         self.onError?(error)
                         return
                     }
@@ -87,8 +83,7 @@ import CoreNFC
                         self.onNDEFMessageReceived?([message])
                     } else {
                         statusMessage = "No NDEF message found."
-                        session.alertMessage = statusMessage
-                        session.invalidate()
+                        session.invalidate(errorMessage: statusMessage)
                     }
                 }
             }
