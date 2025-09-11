@@ -9,6 +9,10 @@ export interface NFCPluginBasic {
     }>;
     startScan(): Promise<void>;
     /**
+     * Cancels an ongoing scan session (iOS only currently; no-op / rejection on Android).
+     */
+    cancelScan(): Promise<void>;
+    /**
      * Writes an NDEF message to an NFC tag.
      * @param options The NDEF message to write.
      */
@@ -73,10 +77,19 @@ export declare type NDEFMessagesTransformable = {
     numberArray: () => NDEFMessages<number[]>;
 };
 export declare type TagResultListenerFunc = (data: NDEFMessagesTransformable) => void;
-export interface NFCPlugin extends Omit<NFCPluginBasic, "writeNDEF" | "addListener"> {
+export interface NFCPlugin extends Omit<NFCPluginBasic, 'writeNDEF' | 'addListener'> {
     writeNDEF: <T extends PayloadType = Uint8Array>(record?: NDEFWriteOptions<T>) => Promise<void>;
     wrapperListeners: TagResultListenerFunc[];
-    onRead: (listenerFunc: TagResultListenerFunc) => void;
-    onWrite: (listenerFunc: () => void) => void;
-    onError: (listenerFunc: (error: NFCError) => void) => void;
+    /**
+     * Register a read listener. Returns an unsubscribe function to remove just this listener.
+     */
+    onRead: (listenerFunc: TagResultListenerFunc) => () => void;
+    /**
+     * Register a write success listener. Returns an unsubscribe function.
+     */
+    onWrite: (listenerFunc: () => void) => () => void;
+    /**
+     * Register an error listener. Returns an unsubscribe function.
+     */
+    onError: (listenerFunc: (error: NFCError) => void) => () => void;
 }
