@@ -19,15 +19,15 @@ A Capacitor plugin for reading and writing NFC tags on iOS and Android devices. 
   - [Methods](#methods)
     - [`isSupported()`](#issupported)
     - [`startScan()`](#startscan)
-    - [`writeNDEF(options)`](#writendefoptions-ndefwriteoptionst-extends-string--number--uint8array--string)
+  - [`writeNDEF(options)`](#writendefoptions-ndefwriteoptionst-extends-string--number--uint8array--string)
     - [`cancelWriteAndroid`](#cancelwriteandroid)
   - [Listeners](#listeners)
     - [`onRead(listener)`](#onreadlistener-data-ndefmessagestransformable--void)
-    - [`onError('listener)`](#onerrorlistener-error-nfcerror--void)
+  - [`onError(listener)`](#onerrorlistener-error-nfcerror--void)
     - [`onWrite(listener)`](#onwritelistener---void)
   - [Interfaces](#interfaces)
     - [`NDEFWriteOptions`](#ndefwriteoptions)
-    - [`NDEFWriteOptions`](#ndefmessagestransformable)
+  - [`NDEFMessagesTransformable`](#ndefmessagestransformable)
     - [`NDEFMessages`](#ndefmessages)
     - [`NDEFMessage`](#ndefmessage)
     - [`NDEFRecord`](#ndefrecord)
@@ -189,7 +189,7 @@ NFC.startScan()
   });
 ```
 
-#### `writeNDEF(options: NDEFWriteOptions<T extends string | number[] | Uint8Array = string)`
+#### `writeNDEF(options: NDEFWriteOptions<T extends string | number[] | Uint8Array = string>)`
 
 Writes an NDEF message to an NFC tag.
 
@@ -203,6 +203,8 @@ Automatic formatting rules (to aid interoperability):
 - `Uint8Array` or `number[]` payloads are treated as raw bytes and written verbatim (never altered).
 
 If you need full manual control of a Text or URI record, supply raw bytes (number[] / Uint8Array) and the plugin will not modify them.
+
+If you attempt to write zero records the promise rejects with `Error("At least one NDEF record is required")`.
 
 Android use: since Android has no default UI for reading and writing NFC tags, it is recommended that you add a UI indicator to your application when calling `writeNDEF` and remove it in the `nfcWriteSuccess` listener callback and the `nfcError` listener callback. This will prevent accidental writes to tags that your users intended to read from.
 
@@ -235,7 +237,7 @@ Adds a listener for NFC tag detection events. Returns type `NDEFMessagesTransfor
 - `string()`: Returns `NDEFMessages<string>`, where all payloads are strings.
 - `base64()`: Returns `NDEFMessages<string>`, where all payloads are the base64-encoded payloads read from the NFC tag.
 - `uint8Array()`: Returns `NDEFMessages<Uint8Array>`, where all payloads are the `Uint8Array` bytes from the NFC tag.
-- `numberArray()`: Returns `NDEFMessages<number[]>`, where all payloads' bytes from the NFC tag represented as a `number[]`.
+- `numberArray()`: Returns `NDEFMessages<number[]>`, where all payloads' bytes from the NFC tag are represented as a `number[]`.
 
 **Parameters**:
 
@@ -390,54 +392,42 @@ To integrate this plugin into your Capacitor app:
 Here's a complete example of how to read and write NFC tags in your app:
 
 ```typescript
-import { NFC, NDEFMessages, NDEFWriteOptions, NFCError } from '@exxili/capacitor-nfc';
+import { NFC, NDEFWriteOptions, NFCError, NDEFMessagesTransformable } from '@exxili/capacitor-nfc';
 
-// Check if NFC is supported
+// Check if NFC is supported (optional gating logic)
 const { supported } = await NFC.isSupported();
+if (!supported) {
+  console.warn('NFC not supported on this device');
+}
 
-// Start NFC scanning -- iOS only
-NFC.startScan().catch((error) => {
-  console.error('Error starting NFC scan:', error);
+// Start NFC scanning (needed on iOS only)
+NFC.startScan().catch((err) => console.error('Failed to start scan', err));
+
+// Read listener returns a transformable wrapper
+NFC.onRead((data: NDEFMessagesTransformable) => {
+  const textView = data.string(); // NDEFMessages<string>
+  const rawBytesView = data.uint8Array(); // NDEFMessages<Uint8Array>
+
+  const firstText = textView.messages[0]?.records[0]?.payload;
+  const firstLength = rawBytesView.messages[0]?.records[0]?.payload.length;
+  console.log('First text record:', firstText);
+  console.log('First record byte length:', firstLength);
 });
 
-// Listen for NFC tag detection
-NFC.onRead((data: NDEFMessages) => {
-  const stringMessages: NDEFMessage<string> = data.string();
-  const uint8ArrayMessages: NDEFMessage<Uint8Array> = data.uint8Array();
+// Error listener (covers read & write errors)
+NFC.onError((error: NFCError) => console.error('NFC Error:', error));
 
-  // Print all Uint8Array payloads
-  console.log('Received NFC tag:', stringMessages.messages?.at(0)?.records?.at(0).payload); // prints string[]
-  console.log('Received NFC tag:', uint8ArrayPayloads.messages?.at(0)?.records?.at(0).payload); // prints Uint8Array[]
-});
-
-// Handle NFC errors
-NFC.onError((error: NFCError) => {
-  console.error('NFC Error:', error);
-});
-
-// Prepare an NDEF message to write
+// Prepare an NDEF message to write (auto-formats Text/URI if payload is string)
 const message: NDEFWriteOptions = {
   records: [
-    {
-      type: 'T', // Text record type
-      payload: 'Hello, NFC!',
-    },
+    { type: 'T', payload: 'Hello, NFC!' },
+    { type: 'U', payload: 'https://example.com' },
   ],
 };
 
-// Write NDEF message to NFC tag
-NFC.writeNDEF(message)
-  .then(() => {
-    console.log('Write initiated');
-  })
-  .catch((error) => {
-    console.error('Error writing to NFC tag:', error);
-  });
+await NFC.writeNDEF(message).catch((err) => console.error('Write failed', err));
 
-// Listen for write success
-NFC.onWrite(() => {
-  console.log('NDEF message written successfully.');
-});
+NFC.onWrite(() => console.log('Write success'));
 ```
 
 ## License
