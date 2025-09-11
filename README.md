@@ -95,20 +95,26 @@ import { NFC } from '@exxili/capacitor-nfc';
 To read NFC tags, you need to listen for `nfcTag` events. On iOS, you must also start the NFC scanning session using `startScan()`.
 
 ```typescript
-import {NFC, NDEFMessagesTransformable, NFCError} from '@exxili/capacitor-nfc';
+import { NFC, NDEFMessagesTransformable, NFCError } from '@exxili/capacitor-nfc';
 
-// Start NFC scanning
+// Start NFC scanning (iOS only)
 NFC.startScan().catch((error) => {
   console.error('Error starting NFC scan:', error);
 });
 
 // Listen for NFC tag detection
 NFC.onRead((data: NDEFMessagesTransformable) => {
-  console.log('Received NFC tag:', data.string());
+  // Text (T) and URI (U) records decoded; others best-effort UTF-8
+  const asString = data.string();
+  console.log('First record text payload:', asString.messages[0]?.records[0]?.payload);
+
+  // Raw bytes
+  const asUint8 = data.uint8Array();
+  console.log('First record raw bytes length:', asUint8.messages[0]?.records[0]?.payload.length);
 });
 
 // Handle NFC errors
-NFC.onError('nfcError', (error: NFCError) => {
+NFC.onError((error: NFCError) => {
   console.error('NFC Error:', error);
 });
 ```
@@ -123,8 +129,16 @@ import { NFC, NDEFWriteOptions, NFCError } from '@exxili/capacitor-nfc';
 const message: NDEFWriteOptions = {
   records: [
     {
-      type: 'T', // Text record type
+      type: 'T', // Well Known Text record. String payload will be encoded as: [status][lang='en'][UTF-8 text]
       payload: 'Hello, NFC!',
+    },
+    {
+      type: 'U', // Well Known URI record. String payload encoded as: [0x00][URI bytes]
+      payload: 'https://example.com',
+    },
+    {
+      type: 'T',
+      payload: new Uint8Array([0x01, 0x65, 0x48, 0x69]), // Raw bytes preserved (DO NOT re-format)
     },
   ],
 };
@@ -161,7 +175,7 @@ Returns if NFC is supported on the scanning device.
 
 #### `startScan()`
 
-Starts the NFC scanning session on ***iOS only***. Android devices are always in reading mode, so setting up the `nfcTag` listener is sufficient to handle tag reads on Android.
+Starts the NFC scanning session on **_iOS only_**. Android devices are always in reading mode, so setting up the `nfcTag` listener is sufficient to handle tag reads on Android.
 
 **Returns**: `Promise<void>`
 
@@ -179,13 +193,22 @@ NFC.startScan()
 
 Writes an NDEF message to an NFC tag.
 
-Payload may be provided as a string, `Uint8Array`, or an array of numbers. The plugin will automatically convert the payload to a byte array for storage on the NFC tag.
+Payload may be provided as a string, `Uint8Array`, or an array of numbers.
+
+Automatic formatting rules (to aid interoperability):
+
+- Text (`type: 'T'` + string payload): encoded per NFC Forum RTD Text spec `[status][lang=en][UTF-8 text]`.
+- URI (`type: 'U'` + string payload): encoded as `[0x00][UTF-8 URI bytes]` (prefix compression not yet applied).
+- Any other `type` + string payload: UTF-8 bytes only (no extra framing).
+- `Uint8Array` or `number[]` payloads are treated as raw bytes and written verbatim (never altered).
+
+If you need full manual control of a Text or URI record, supply raw bytes (number[] / Uint8Array) and the plugin will not modify them.
 
 Android use: since Android has no default UI for reading and writing NFC tags, it is recommended that you add a UI indicator to your application when calling `writeNDEF` and remove it in the `nfcWriteSuccess` listener callback and the `nfcError` listener callback. This will prevent accidental writes to tags that your users intended to read from.
 
 **Parameters**:
 
-- `options: NDEFWriteOptions<T extends string | number[] | Uint8Array = string>` - The NDEF message to write.
+- `options: NDEFWriteOptions<T extends string | number[] | Uint8Array = string>` - The NDEF message to write. Must include at least one record.
 
 **Returns**: `Promise<void>`
 
@@ -209,10 +232,10 @@ Cancels an Android NFC write operation. Android does not have a native UI for NF
 
 Adds a listener for NFC tag detection events. Returns type `NDEFMessagesTransformable`, which returns the following methods to provide the payload:
 
-* `string()`: Returns `NDEFMessages<string>`, where all payloads are strings.
-* `base64()`: Returns `NDEFMessages<string>`, where all payloads are the base64-encoded payloads read from the NFC tag.
-* `uint8Array()`: Returns `NDEFMessages<Uint8Array>`, where all payloads are the `Uint8Array` bytes from the NFC tag.
-* `numberArray()`: Returns `NDEFMessages<number[]>`, where all payloads bytes from the NFC tag represented as a `number[]`.
+- `string()`: Returns `NDEFMessages<string>`, where all payloads are strings.
+- `base64()`: Returns `NDEFMessages<string>`, where all payloads are the base64-encoded payloads read from the NFC tag.
+- `uint8Array()`: Returns `NDEFMessages<Uint8Array>`, where all payloads are the `Uint8Array` bytes from the NFC tag.
+- `numberArray()`: Returns `NDEFMessages<number[]>`, where all payloads' bytes from the NFC tag represented as a `number[]`.
 
 **Parameters**:
 
@@ -221,8 +244,12 @@ Adds a listener for NFC tag detection events. Returns type `NDEFMessagesTransfor
 **Returns**: `void`
 
 ```typescript
-NFC.onRead((data: NDEFMessages) => {
-  console.log('Received NFC tag:', data);
+NFC.onRead((data) => {
+  const textRecords = data.string(); // Decoded string representation
+  const base64Records = data.base64(); // Original base64 payloads
+  const bytesRecords = data.uint8Array(); // Uint8Array payloads
+  const numArrayRecords = data.numberArray(); // number[] representation
+  console.log(textRecords);
 });
 ```
 
@@ -253,7 +280,7 @@ Adds a listener for NFC write success events.
 **Returns**: `PluginListenerHandle`
 
 ```typescript
-NFC.onWrite('nfcWriteSuccess', () => {
+NFC.onWrite(() => {
   console.log('NDEF message written successfully.');
 });
 ```
@@ -274,17 +301,17 @@ interface NDEFWriteOptions<T extends string | number[] | Uint8Array = string> {
 
 Returned by `onRead` and includes the following methods to provide the payload:
 
-* `string()`: Returns `NDEFMessages<string>`, where all payloads are strings.
-* `base64()`: Returns `NDEFMessages<string>`, where all payloads are the base64-encoded payloads read from the NFC tag.
-* `uint8Array()`: Returns `NDEFMessages<Uint8Array>`, where all payloads are the `Uint8Array` bytes from the NFC tag.
-* `numberArray()`: Returns `NDEFMessages<number[]>`, where all payloads bytes from the NFC tag represented as a `number[]`.
+- `string()`: Returns `NDEFMessages<string>`, where all payloads are strings.
+- `base64()`: Returns `NDEFMessages<string>`, where all payloads are the base64-encoded payloads read from the NFC tag.
+- `uint8Array()`: Returns `NDEFMessages<Uint8Array>`, where all payloads are the `Uint8Array` bytes from the NFC tag.
+- `numberArray()`: Returns `NDEFMessages<number[]>`, where all payloads bytes from the NFC tag represented as a `number[]`.
 
 ```typescript
 interface NDEFMessagesTransformable {
-  base64: ()=> NDEFMessages;
-  uint8Array: ()=> NDEFMessages<Uint8Array>;
-  string: ()=> NDEFMessages;
-  numberArray: ()=> NDEFMessages<number[]>;
+  base64: () => NDEFMessages<string>; // Original base64 strings
+  uint8Array: () => NDEFMessages<Uint8Array>; // Raw bytes
+  string: () => NDEFMessages<string>; // Decoded (T & U handled, others UTF-8 best-effort)
+  numberArray: () => NDEFMessages<number[]>; // Raw bytes as number[]
 }
 ```
 
@@ -324,7 +351,7 @@ interface NDEFRecord<T = number[]> {
    */
   payload: T;
 }
-````
+```
 
 #### `NFCError`
 
@@ -377,10 +404,10 @@ NFC.startScan().catch((error) => {
 NFC.onRead((data: NDEFMessages) => {
   const stringMessages: NDEFMessage<string> = data.string();
   const uint8ArrayMessages: NDEFMessage<Uint8Array> = data.uint8Array();
-  
+
   // Print all Uint8Array payloads
-  console.log('Received NFC tag:', stringMessages.messages?.at(0)?.records?.at(0).payload);    // prints string[]
-  console.log('Received NFC tag:', uint8ArrayPayloads.messages?.at(0)?.records?.at(0).payload);    // prints Uint8Array[]
+  console.log('Received NFC tag:', stringMessages.messages?.at(0)?.records?.at(0).payload); // prints string[]
+  console.log('Received NFC tag:', uint8ArrayPayloads.messages?.at(0)?.records?.at(0).payload); // prints Uint8Array[]
 });
 
 // Handle NFC errors
@@ -408,7 +435,7 @@ NFC.writeNDEF(message)
   });
 
 // Listen for write success
-NFC.onWrite('nfcWriteSuccess', () => {
+NFC.onWrite(() => {
   console.log('NDEF message written successfully.');
 });
 ```
