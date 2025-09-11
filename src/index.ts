@@ -31,25 +31,46 @@ export const NFC: NFCPlugin = {
   wrapperListeners: [],
 
   async writeNDEF<T extends PayloadType = Uint8Array>(options?: NDEFWriteOptions<T>): Promise<void> {
+    // Helper encoders for well-known record types (only applied to string payloads)
+    const buildTextPayload = (text: string, lang = 'en'): number[] => {
+      const langBytes = Array.from(new TextEncoder().encode(lang));
+      const textBytes = Array.from(new TextEncoder().encode(text));
+      const status = langBytes.length & 0x3f; // UTF-8 encoding, language length (<= 63)
+      return [status, ...langBytes, ...textBytes];
+    };
+    const buildUriPayload = (uri: string, prefixCode = 0x00): number[] => {
+      const uriBytes = Array.from(new TextEncoder().encode(uri));
+      return [prefixCode, ...uriBytes];
+    };
+
+    const recordsArray = options?.records ?? [];
+    if (recordsArray.length === 0) throw new Error('At least one NDEF record is required');
+
     const ndefMessage: NDEFWriteOptions<number[]> = {
-      records:
-        options?.records.map((record) => {
-          const payload: number[] | null =
-            typeof record.payload === 'string'
-              ? Array.from(new TextEncoder().encode(record.payload))
-              : Array.isArray(record.payload)
-                ? record.payload
-                : record.payload instanceof Uint8Array
-                  ? Array.from(record.payload)
-                  : null;
+      records: recordsArray.map((record) => {
+        let payload: number[] | null = null;
 
-          if (!payload) throw 'Unsupported payload type';
+        if (typeof record.payload === 'string') {
+          // Apply spec-compliant formatting only for Well Known Text (T) & URI (U) types.
+          if (record.type === 'T') {
+            payload = buildTextPayload(record.payload);
+          } else if (record.type === 'U') {
+            payload = buildUriPayload(record.payload);
+          } else {
+            // Generic string: raw UTF-8 bytes (no extra framing)
+            payload = Array.from(new TextEncoder().encode(record.payload));
+          }
+        } else if (Array.isArray(record.payload)) {
+          // Assume already raw bytes; do NOT modify
+          payload = record.payload as number[];
+        } else if (record.payload instanceof Uint8Array) {
+          payload = Array.from(record.payload);
+        }
 
-          return {
-            type: record.type,
-            payload,
-          };
-        }) ?? [],
+        if (!payload) throw new Error('Unsupported payload type');
+
+        return { type: record.type, payload };
+      }),
     };
 
     await NFCPlug.writeNDEF(ndefMessage);
