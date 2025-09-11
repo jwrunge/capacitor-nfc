@@ -71,7 +71,7 @@ class NFCPlugin : Plugin() {
             writeMode = false
             recordsBuffer = null
         }
-        else if (ACTION_NDEF_DISCOVERED == intent.action || ACTION_TAG_DISCOVERED == intent.action) {
+    else if (ACTION_NDEF_DISCOVERED == intent.action || ACTION_TAG_DISCOVERED == intent.action || ACTION_TECH_DISCOVERED == intent.action) {
             Log.d("NFC", "READ MODE START")
             handleReadTag(intent)
         }
@@ -313,52 +313,72 @@ class NFCPlugin : Plugin() {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun handleReadTag(intent: Intent) {
         val jsResponse = JSObject()
-
         val ndefMessages = JSArray()
 
-        when (intent.action) {
-            NfcAdapter.ACTION_NDEF_DISCOVERED -> {
-                val receivedMessages = intent.getParcelableArrayExtra(
-                    EXTRA_NDEF_MESSAGES,
-                    NdefMessage::class.java
-                )
+        // Try to obtain raw NDEF messages first (ACTION_NDEF_DISCOVERED path)
+        val receivedMessages = intent.getParcelableArrayExtra(
+            EXTRA_NDEF_MESSAGES,
+            NdefMessage::class.java
+        )
 
-                receivedMessages?.also { rawMessages ->
-                    for (message in rawMessages) {
-                        val ndefRecords = JSArray()
-                        for (record in message.records) {
-                            val rec = JSObject()
-                            rec.put("type", String(record.type, Charsets.UTF_8))
-                            rec.put("payload", Base64.getEncoder().encodeToString(record.payload))
-                            ndefRecords.put(rec)
+        if (receivedMessages != null && receivedMessages.isNotEmpty()) {
+            // Standard NDEF-discovered path
+            for (message in receivedMessages) {
+                ndefMessages.put(ndefMessageToJS(message))
+            }
+        } else {
+            // For ACTION_TAG_DISCOVERED or ACTION_TECH_DISCOVERED we may still have an NDEF tag.
+            val tag: Tag? = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG, Tag::class.java)
+            var added = false
+            if (tag != null) {
+                val ndef = Ndef.get(tag)
+                if (ndef != null) {
+                    try {
+                        ndef.connect()
+                        // Prefer cached message to avoid additional IO if available
+                        val message: NdefMessage? = ndef.cachedNdefMessage ?: try {
+                            ndef.ndefMessage
+                        } catch (e: Exception) { null }
+                        if (message != null) {
+                            ndefMessages.put(ndefMessageToJS(message))
+                            added = true
                         }
-
-                        val msg = JSObject()
-                        msg.put("records", ndefRecords)
-                        ndefMessages.put(msg)
+                    } catch (e: Exception) {
+                        Log.w("NFC", "Failed to read NDEF message from TECH/TAG intent: ${e.message}")
+                    } finally {
+                        try { ndef.close() } catch (_: Exception) {}
                     }
                 }
-            }
 
-            NfcAdapter.ACTION_TAG_DISCOVERED -> {
-                val tagId = intent.getByteArrayExtra(NfcAdapter.EXTRA_ID)
-                val result = if (tagId != null) byteArrayToHexString(tagId) else ""
-
-                val rec = JSObject()
-                rec.put("type", "ID")
-                rec.put("payload", Base64.getEncoder().encodeToString(result.toByteArray()))
-
-                val ndefRecords = JSArray()
-                ndefRecords.put(rec)
-
-                val msg = JSObject()
-                msg.put("records", ndefRecords)
-                ndefMessages.put(msg)
+                // If no NDEF message found, fallback to tag ID (legacy behavior)
+                if (!added) {
+                    val tagId = intent.getByteArrayExtra(NfcAdapter.EXTRA_ID)
+                    val result = if (tagId != null) byteArrayToHexString(tagId) else ""
+                    val rec = JSObject()
+                    rec.put("type", "ID")
+                    rec.put("payload", Base64.getEncoder().encodeToString(result.toByteArray()))
+                    val ndefRecords = JSArray().apply { put(rec) }
+                    val msg = JSObject().apply { put("records", ndefRecords) }
+                    ndefMessages.put(msg)
+                }
             }
         }
 
         jsResponse.put("messages", ndefMessages)
         this.notifyListeners("nfcTag", jsResponse)
+    }
+
+    private fun ndefMessageToJS(message: NdefMessage): JSObject {
+        val ndefRecords = JSArray()
+        for (record in message.records) {
+            val rec = JSObject()
+            rec.put("type", String(record.type, Charsets.UTF_8))
+            rec.put("payload", Base64.getEncoder().encodeToString(record.payload))
+            ndefRecords.put(rec)
+        }
+        val msg = JSObject()
+        msg.put("records", ndefRecords)
+        return msg
     }
 
     private fun byteArrayToHexString(inarray: ByteArray): String {
