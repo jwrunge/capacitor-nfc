@@ -37,7 +37,9 @@ export const NFC: NFCPlugin = {
     return () => {
       try {
         handle?.remove?.();
-      } catch {}
+      } catch {
+        /* empty */
+      }
     };
   },
   onError: (errorFn: (error: NFCError) => void) => {
@@ -46,7 +48,9 @@ export const NFC: NFCPlugin = {
     return () => {
       try {
         handle?.remove?.();
-      } catch {}
+      } catch {
+        /* empty */
+      }
     };
   },
   removeAllListeners: (eventName: 'nfcTag' | 'nfcError') => {
