@@ -315,6 +315,10 @@ class NFCPlugin : Plugin() {
         val jsResponse = JSObject()
         val ndefMessages = JSArray()
 
+        // Get tag information regardless of NDEF content
+        val tag: Tag? = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG, Tag::class.java)
+        val tagInfo = tag?.let { extractTagInfo(it) }
+
         // Try to obtain raw NDEF messages first (ACTION_NDEF_DISCOVERED path)
         val receivedMessages = intent.getParcelableArrayExtra(
             EXTRA_NDEF_MESSAGES,
@@ -328,7 +332,6 @@ class NFCPlugin : Plugin() {
             }
         } else {
             // For ACTION_TAG_DISCOVERED or ACTION_TECH_DISCOVERED we may still have an NDEF tag.
-            val tag: Tag? = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG, Tag::class.java)
             var added = false
             if (tag != null) {
                 val ndef = Ndef.get(tag)
@@ -352,7 +355,7 @@ class NFCPlugin : Plugin() {
 
                 // If no NDEF message found, fallback to tag ID (legacy behavior)
                 if (!added) {
-                    val tagId = intent.getByteArrayExtra(NfcAdapter.EXTRA_ID)
+                    val tagId = intent.getByteArrayExtra(NfcAdapter.EXTRA_ID) ?: tag.id
                     val result = if (tagId != null) byteArrayToHexString(tagId) else ""
                     val rec = JSObject()
                     rec.put("type", "ID")
@@ -365,7 +368,43 @@ class NFCPlugin : Plugin() {
         }
 
         jsResponse.put("messages", ndefMessages)
+        // Always include tag information if available
+        if (tagInfo != null) {
+            jsResponse.put("tagInfo", tagInfo)
+        }
         this.notifyListeners("nfcTag", jsResponse)
+    }
+
+    private fun extractTagInfo(tag: Tag): JSObject {
+        val tagInfo = JSObject()
+        
+        // Always include UID
+        val uid = byteArrayToHexString(tag.id)
+        tagInfo.put("uid", uid)
+        
+        // Include technology types
+        val techTypes = JSArray()
+        for (tech in tag.techList) {
+            techTypes.put(tech)
+        }
+        tagInfo.put("techTypes", techTypes)
+        
+        // Try to get NDEF-specific information
+        val ndef = Ndef.get(tag)
+        if (ndef != null) {
+            try {
+                ndef.connect()
+                tagInfo.put("maxSize", ndef.maxSize)
+                tagInfo.put("isWritable", ndef.isWritable)
+                tagInfo.put("type", ndef.type)
+            } catch (e: Exception) {
+                Log.w("NFC", "Failed to read NDEF tag info: ${e.message}")
+            } finally {
+                try { ndef.close() } catch (_: Exception) {}
+            }
+        }
+        
+        return tagInfo
     }
 
     private fun ndefMessageToJS(message: NdefMessage): JSObject {
@@ -385,7 +424,7 @@ class NFCPlugin : Plugin() {
         val hex = arrayOf("0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F")
         var out = ""
 
-        for (j in inarray.size - 1 downTo 0) {
+        for (j in inarray.indices) {
             val `in` = inarray[j].toInt() and 0xff
             val i1 = (`in` shr 4) and 0x0f
             out += hex[i1]
