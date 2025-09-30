@@ -114,6 +114,17 @@ NFC.onRead((data: NDEFMessagesTransformable) => {
   // Raw bytes
   const asUint8 = data.uint8Array();
   console.log('First record raw bytes length:', asUint8.messages[0]?.records[0]?.payload.length);
+
+  // Access tag information (UID, tech types, etc.)
+  if (asString.tagInfo) {
+    console.log('Tag UID:', asString.tagInfo.uid);
+    console.log('Tag technologies:', asString.tagInfo.techTypes);
+    console.log('Tag type:', asString.tagInfo.type);
+    if (asString.tagInfo.maxSize) {
+      console.log('Max NDEF size:', asString.tagInfo.maxSize);
+    }
+    console.log('Is writable:', asString.tagInfo.isWritable);
+  }
 });
 
 // Handle NFC errors
@@ -345,6 +356,40 @@ Data received from an NFC tag.
 ```typescript
 interface NDEFMessages {
   messages: NDEFMessage[];
+  tagInfo?: TagInfo;
+}
+```
+
+#### `TagInfo`
+
+Information about the NFC tag that was read.
+
+```typescript
+interface TagInfo {
+  /**
+   * The unique identifier of the tag (UID) as a hex string
+   */
+  uid: string;
+
+  /**
+   * The NFC tag technology types supported
+   */
+  techTypes: string[];
+
+  /**
+   * The maximum size of NDEF message that can be written to this tag (if applicable)
+   */
+  maxSize?: number;
+
+  /**
+   * Whether the tag is writable
+   */
+  isWritable?: boolean;
+
+  /**
+   * The tag type (e.g., "ISO14443-4", "MifareClassic", etc.)
+   */
+  type?: string;
 }
 ```
 
