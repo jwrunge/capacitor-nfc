@@ -1,10 +1,14 @@
+'use strict';
+
+Object.defineProperty(exports, '__esModule', { value: true });
+
+var core = require('@capacitor/core');
+
 var _a, _b;
-import { registerPlugin } from '@capacitor/core';
-const NFCPlug = registerPlugin('NFC', {
-    web: () => import('./web').then((m) => new m.NFCWeb()),
+const NFCPlug = core.registerPlugin('NFC', {
+    web: () => Promise.resolve().then(function () { return web; }).then((m) => new m.NFCWeb()),
 });
-export * from './definitions';
-export const NFC = {
+const NFC = {
     isSupported: NFCPlug.isSupported.bind(NFCPlug),
     startScan: NFCPlug.startScan.bind(NFCPlug),
     cancelScan: (_b = (_a = NFCPlug.cancelScan) === null || _a === void 0 ? void 0 : _a.bind(NFCPlug)) !== null && _b !== void 0 ? _b : (async () => {
@@ -240,4 +244,29 @@ NFCPlug.addListener(`nfcTag`, (data) => {
         listener(wrappedData);
     }
 });
-//# sourceMappingURL=index.js.map
+
+class NFCWeb extends core.WebPlugin {
+    async isSupported() {
+        return { supported: false };
+    }
+    async startScan() {
+        throw new Error('NFC is not supported on web');
+    }
+    async cancelScan() {
+        throw new Error('NFC is not supported on web');
+    }
+    async cancelWriteAndroid() {
+        throw new Error('NFC is not supported on web');
+    }
+    async writeNDEF() {
+        throw new Error('NFC is not supported on web');
+    }
+}
+
+var web = /*#__PURE__*/Object.freeze({
+    __proto__: null,
+    NFCWeb: NFCWeb
+});
+
+exports.NFC = NFC;
+//# sourceMappingURL=plugin.cjs.js.map
