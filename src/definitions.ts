@@ -66,10 +66,38 @@ export interface NFCPluginBasic {
 
 export interface NDEFMessages<T extends PayloadType = string> {
   messages: NDEFMessage<T>[];
+  tagInfo?: TagInfo;
 }
 
 export interface NDEFMessage<T extends PayloadType = string> {
   records: NDEFRecord<T>[];
+}
+
+export interface TagInfo {
+  /**
+   * The unique identifier of the tag (UID) as a hex string
+   */
+  uid: string;
+
+  /**
+   * The NFC tag technology types supported
+   */
+  techTypes: string[];
+
+  /**
+   * The maximum size of NDEF message that can be written to this tag (if applicable)
+   */
+  maxSize?: number;
+
+  /**
+   * Whether the tag is writable
+   */
+  isWritable?: boolean;
+
+  /**
+   * The tag type (e.g., "ISO14443-4", "MifareClassic", etc.)
+   */
+  type?: string;
 }
 
 export interface NDEFRecord<T extends PayloadType = string> {
