@@ -1,8 +1,12 @@
 import Foundation
 import CoreNFC
+#if NFC_DEBUG_ENTITLEMENTS && canImport(Security)
+import Security
+#endif
 
-@objc public class NFCReader: NSObject, NFCTagReaderSessionDelegate {
+@objc public class NFCReader: NSObject, NFCTagReaderSessionDelegate, NFCNDEFReaderSessionDelegate {
     private var readerSession: NFCTagReaderSession?
+    private var ndefReaderSession: NFCNDEFReaderSession?
 
     public var onNDEFMessageReceived: (([NFCNDEFMessage], [String: Any]?) -> Void)?
     public var onError: ((Error) -> Void)?
@@ -10,7 +14,7 @@ import CoreNFC
     @objc public func startScanning() {
         print("NFCReader startScanning called")
 
-    // Entitlement introspection removed to avoid build issues on some toolchains.
+    logNFCFormatsIfAvailable()
 
         guard NFCNDEFReaderSession.readingAvailable else {
             print("NFC scanning not supported on this device")
@@ -21,15 +25,24 @@ import CoreNFC
         readerSession?.begin()
     }
 
-    // Previously had a logNFCEntitlements() helper using Security.framework APIs
-    // (SecTaskCreateFromSelf / SecTaskCopyValueForEntitlement) which caused
-    // indexing/build failures in some environments. Removed for stability.
+    private func logNFCFormatsIfAvailable() {
+        #if NFC_DEBUG_ENTITLEMENTS && canImport(Security) && os(iOS)
+        guard let task = SecTaskCreateFromSelf(nil) else { print("[NFC DEBUG] Cannot create SecTask"); return }
+        let key = "com.apple.developer.nfc.readersession.formats" as CFString
+        guard let raw = SecTaskCopyValueForEntitlement(task, key, nil) else { print("[NFC DEBUG] formats entitlement ABSENT"); return }
+        if let formats = raw as? [String] {
+            print("[NFC DEBUG] formats entitlement at runtime = \(formats)")
+            if !formats.contains("TAG") { print("[NFC DEBUG] 'TAG' missing -> NFCTagReaderSession will fail") }
+            if !formats.contains("NDEF") { print("[NFC DEBUG] 'NDEF' missing -> NDEF read/write limited") }
+        } else { print("[NFC DEBUG] formats entitlement unexpected type: \(raw)") }
+        #endif
+    }
 
     @objc public func cancelScanning() {
-        if let session = readerSession {
-            session.invalidate()
-        }
+        if let session = readerSession { session.invalidate() }
+        if let ndef = ndefReaderSession { ndef.invalidate() }
         readerSession = nil
+        ndefReaderSession = nil
     }
 
     // NFCTagReaderSessionDelegate methods
@@ -39,7 +52,99 @@ import CoreNFC
 
     public func tagReaderSession(_ session: NFCTagReaderSession, didInvalidateWithError error: Error) {
         print("NFC reader session error: \(error.localizedDescription)")
+        // Automatic fallback: if missing entitlement, attempt NDEF-only session once
+        if let nfcError = error as? NFCReaderError,
+           nfcError.localizedDescription.contains("Missing required entitlement"),
+           readerSession != nil { // ensure this is our initial session
+            print("[NFC] Attempting fallback to NFCNDEFReaderSession")
+            readerSession = nil
+            startFallbackNDEFSession()
+            return
+        }
         onError?(error)
+    }
+
+    private func startFallbackNDEFSession() {
+        guard NFCNDEFReaderSession.readingAvailable else { return }
+        // Avoid multiple fallback sessions
+        if ndefReaderSession != nil { return }
+        let session = NFCNDEFReaderSession(delegate: self, queue: nil, invalidateAfterFirstRead: false)
+        session.alertMessage = "Hold your iPhone near the NFC tag. (NDEF mode)"
+        ndefReaderSession = session
+        session.begin()
+    }
+
+    // MARK: - NFCNDEFReaderSessionDelegate
+    public func readerSession(_ session: NFCNDEFReaderSession, didInvalidateWithError error: Error) {
+        print("NDEF reader session error: \(error.localizedDescription)")
+        if (session === ndefReaderSession) { ndefReaderSession = nil }
+        onError?(error)
+    }
+
+    // Called when the NFCNDEFReaderSession becomes active (needed to silence runtime delegate warning)
+    public func readerSessionDidBecomeActive(_ session: NFCNDEFReaderSession) {
+        let isFallback = (session === ndefReaderSession)
+        print("NDEF reader session became active (fallback mode: \(isFallback))")
+        if isFallback {
+            // Emit an empty message set with a fallback flag so JS layer can distinguish mode immediately.
+            onNDEFMessageReceived?([], ["fallback": true])
+        }
+    }
+
+    public func readerSession(_ session: NFCNDEFReaderSession, didDetect tags: [NFCNDEFTag]) {
+        // Mirror writer logic for reading first NDEF tag
+        if tags.count > 1 {
+            let retryInterval = DispatchTimeInterval.milliseconds(500)
+            session.alertMessage = "More than one tag detected. Please try again."
+            DispatchQueue.global().asyncAfter(deadline: .now() + retryInterval) {
+                session.restartPolling()
+            }
+            return
+        }
+        guard let tag = tags.first else { return }
+        session.connect(to: tag) { connectError in
+            if let connectError = connectError {
+                session.invalidate(errorMessage: "Unable to connect to tag.")
+                self.onError?(connectError)
+                return
+            }
+            tag.queryNDEFStatus { status, _, statusError in
+                if let statusError = statusError {
+                    session.invalidate(errorMessage: "Unable to query the NDEF status of tag.")
+                    self.onError?(statusError)
+                    return
+                }
+                guard status != .notSupported else {
+                    session.invalidate(errorMessage: "Tag is not NDEF compliant.")
+                    return
+                }
+                tag.readNDEF { message, readError in
+                    if let readError = readError {
+                        session.invalidate(errorMessage: "Failed to read NDEF message.")
+                        self.onError?(readError)
+                        return
+                    }
+                    if let message = message {
+                        session.alertMessage = "Found 1 NDEF message."
+                        session.invalidate()
+                        self.onNDEFMessageReceived?([message], nil)
+                    } else {
+                        session.alertMessage = "No NDEF message found."
+                        session.invalidate()
+                        self.onNDEFMessageReceived?([], nil)
+                    }
+                }
+            }
+        }
+    }
+
+    // Some SDK versions (and build settings) still require this legacy delegate method.
+    public func readerSession(_ session: NFCNDEFReaderSession, didDetectNDEFs messages: [NFCNDEFMessage]) {
+        // Forward directly; no tag info available in this callback.
+        if !messages.isEmpty {
+            session.invalidate()
+            onNDEFMessageReceived?(messages, nil)
+        }
     }
 
     public func tagReaderSession(_ session: NFCTagReaderSession, didDetect tags: [NFCTag]) {
