@@ -26,7 +26,9 @@ export const NFC = {
             try {
                 (_a = handle === null || handle === void 0 ? void 0 : handle.remove) === null || _a === void 0 ? void 0 : _a.call(handle);
             }
-            catch (_b) { }
+            catch (_b) {
+                /* empty */
+            }
         };
     },
     onError: (errorFn) => {
@@ -37,7 +39,9 @@ export const NFC = {
             try {
                 (_a = handle === null || handle === void 0 ? void 0 : handle.remove) === null || _a === void 0 ? void 0 : _a.call(handle);
             }
-            catch (_b) { }
+            catch (_b) {
+                /* empty */
+            }
         };
     },
     removeAllListeners: (eventName) => {
