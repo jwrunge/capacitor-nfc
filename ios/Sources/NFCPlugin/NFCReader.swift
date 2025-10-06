@@ -1,14 +1,14 @@
 import Foundation
 import CoreNFC
-#if canImport(Security)
-import Security
-#endif
 
 @objc public class NFCReader: NSObject, NFCTagReaderSessionDelegate, NFCNDEFReaderSessionDelegate {
+    public func tagReaderSessionDidBecomeActive(_ session: NFCTagReaderSession) {
+        // Intentionally left blank; no special handling needed when tag session becomes active.
+    }
+    
     private var readerSession: NFCTagReaderSession?
     private var ndefReaderSession: NFCNDEFReaderSession?
-    private var hasTagEntitlement: Bool? // nil = unknown/not checked
-    private var entitlementChecked = false
+    private var tagEntitlementMissing = false // set true after entitlement failure
 
     public var onNDEFMessageReceived: (([NFCNDEFMessage], [String: Any]?) -> Void)?
     public var onError: ((Error) -> Void)?
@@ -16,23 +16,13 @@ import Security
     @objc public func startScanning() {
         print("NFCReader startScanning called")
 
-    logNFCFormatsIfAvailable()
 
         guard NFCNDEFReaderSession.readingAvailable else {
             print("NFC scanning not supported on this device")
             return
         }
-        // Perform entitlement pre-check once and cache result
-        if !entitlementChecked {
-            hasTagEntitlement = checkTagEntitlement()
-            entitlementChecked = true
-            if let value = hasTagEntitlement {
-                print("[NFC] Pre-check TAG entitlement result: \(value)")
-            }
-        }
-
-        if hasTagEntitlement == false {
-            print("[NFC] Skipping NFCTagReaderSession due to missing TAG entitlement; starting fallback immediately")
+        if tagEntitlementMissing {
+            print("[NFC] Previously detected missing TAG entitlement; starting fallback immediately")
             startFallbackNDEFSession()
             return
         }
@@ -42,33 +32,6 @@ import Security
         readerSession?.begin()
     }
 
-    private func logNFCFormatsIfAvailable() {
-        #if NFC_DEBUG_ENTITLEMENTS && canImport(Security) && os(iOS)
-        guard let task = SecTaskCreateFromSelf(nil) else { print("[NFC DEBUG] Cannot create SecTask"); return }
-        let key = "com.apple.developer.nfc.readersession.formats" as CFString
-        guard let raw = SecTaskCopyValueForEntitlement(task, key, nil) else { print("[NFC DEBUG] formats entitlement ABSENT"); return }
-        if let formats = raw as? [String] {
-            print("[NFC DEBUG] formats entitlement at runtime = \(formats)")
-            if !formats.contains("TAG") { print("[NFC DEBUG] 'TAG' missing -> NFCTagReaderSession will fail") }
-            if !formats.contains("NDEF") { print("[NFC DEBUG] 'NDEF' missing -> NDEF read/write limited") }
-        } else { print("[NFC DEBUG] formats entitlement unexpected type: \(raw)") }
-        #endif
-    }
-
-    private func checkTagEntitlement() -> Bool? {
-        #if canImport(Security) && os(iOS)
-        guard let task = SecTaskCreateFromSelf(nil) else { return nil }
-        let key = "com.apple.developer.nfc.readersession.formats" as CFString
-        guard let raw = SecTaskCopyValueForEntitlement(task, key, nil) else { return nil }
-        if let formats = raw as? [String] {
-            return formats.contains("TAG")
-        }
-        return nil
-        #else
-        return nil
-        #endif
-    }
-
     @objc public func cancelScanning() {
         if let session = readerSession { session.invalidate() }
         if let ndef = ndefReaderSession { ndef.invalidate() }
@@ -76,18 +39,12 @@ import Security
         ndefReaderSession = nil
     }
 
-    // NFCTagReaderSessionDelegate methods
-    public func tagReaderSessionDidBecomeActive(_ session: NFCTagReaderSession) {
-
-    }
-
     public func tagReaderSession(_ session: NFCTagReaderSession, didInvalidateWithError error: Error) {
         print("NFC reader session error: \(error.localizedDescription)")
-        // Automatic fallback: if missing entitlement, attempt NDEF-only session once
         if let nfcError = error as? NFCReaderError,
-           nfcError.localizedDescription.contains("Missing required entitlement"),
-           readerSession != nil { // ensure this is our initial session
-            print("[NFC] Attempting fallback to NFCNDEFReaderSession")
+           nfcError.localizedDescription.contains("Missing required entitlement") {
+            tagEntitlementMissing = true
+            print("[NFC] Caching missing TAG entitlement -> future scans use fallback directly")
             readerSession = nil
             startFallbackNDEFSession()
             return
@@ -381,3 +338,5 @@ import Security
         }
     }
 }
+
+// Removed supplemental stubs (logNFCFormatsIfAvailable, tagReaderSessionDidBecomeActive) as they are no longer needed.
