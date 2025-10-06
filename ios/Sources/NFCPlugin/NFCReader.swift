@@ -1,8 +1,5 @@
 import Foundation
 import CoreNFC
-#if canImport(Security)
-import Security
-#endif
 
 @objc public class NFCReader: NSObject, NFCTagReaderSessionDelegate {
     private var readerSession: NFCTagReaderSession?
@@ -13,7 +10,7 @@ import Security
     @objc public func startScanning() {
         print("NFCReader startScanning called")
 
-        logNFCEntitlements()
+    // Entitlement introspection removed to avoid build issues on some toolchains.
 
         guard NFCNDEFReaderSession.readingAvailable else {
             print("NFC scanning not supported on this device")
@@ -24,29 +21,9 @@ import Security
         readerSession?.begin()
     }
 
-    private func logNFCEntitlements() {
-        #if canImport(Security) && os(iOS)
-        if let task = SecTaskCreateFromSelf(nil) {
-            if let value = SecTaskCopyValueForEntitlement(task, "com.apple.developer.nfc.readersession.formats" as CFString, nil) {
-                if let formats = value as? [String] {
-                    print("[NFC DEBUG] com.apple.developer.nfc.readersession.formats = \(formats)")
-                    if !formats.contains("TAG") {
-                        print("[NFC DEBUG] 'TAG' format missing. NFCTagReaderSession limited.")
-                        print("[NFC DEBUG] Add 'TAG' entitlement or switch to NFCNDEFReaderSession if only NDEF needed.")
-                    }
-                } else {
-                    print("[NFC DEBUG] NFC formats entitlement present but unexpected type: \(value)")
-                }
-            } else {
-                print("[NFC DEBUG] NFC formats entitlement NOT present on the signed app.")
-            }
-        } else {
-            print("[NFC DEBUG] Could not create SecTask for entitlement inspection.")
-        }
-        #else
-        print("[NFC DEBUG] Skipping entitlement inspection (Security framework unavailable on this build platform).")
-        #endif
-    }
+    // Previously had a logNFCEntitlements() helper using Security.framework APIs
+    // (SecTaskCreateFromSelf / SecTaskCopyValueForEntitlement) which caused
+    // indexing/build failures in some environments. Removed for stability.
 
     @objc public func cancelScanning() {
         if let session = readerSession {
