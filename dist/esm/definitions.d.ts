@@ -1,5 +1,5 @@
 import type { PluginListenerHandle } from '@capacitor/core';
-export declare type PayloadType = string | number[] | Uint8Array;
+export type PayloadType = string | number[] | Uint8Array;
 export interface NFCPluginBasic {
     /**
      * Checks if NFC is supported on the device. Returns true on all iOS devices, and checks for support on Android.
@@ -93,13 +93,13 @@ export interface NFCError {
 export interface NDEFWriteOptions<T extends PayloadType = Uint8Array> {
     records: NDEFRecord<T>[];
 }
-export declare type NDEFMessagesTransformable = {
+export type NDEFMessagesTransformable = {
     base64: () => NDEFMessages;
     uint8Array: () => NDEFMessages<Uint8Array>;
     string: () => NDEFMessages;
     numberArray: () => NDEFMessages<number[]>;
 };
-export declare type TagResultListenerFunc = (data: NDEFMessagesTransformable) => void;
+export type TagResultListenerFunc = (data: NDEFMessagesTransformable) => void;
 export interface NFCPlugin extends Omit<NFCPluginBasic, 'writeNDEF' | 'addListener'> {
     writeNDEF: <T extends PayloadType = Uint8Array>(record?: NDEFWriteOptions<T>) => Promise<void>;
     wrapperListeners: TagResultListenerFunc[];

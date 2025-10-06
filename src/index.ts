@@ -12,7 +12,8 @@ import type {
 } from './definitions';
 
 const NFCPlug = registerPlugin<NFCPluginBasic>('NFC', {
-  web: () => import('./web').then((m) => new m.NFCWeb()),
+  // Explicit .js extension required under node16/nodenext module resolution for emitted ES modules.
+  web: () => import('./web.js').then((m) => new m.NFCWeb()),
 });
 export * from './definitions';
 export const NFC: NFCPlugin = {
@@ -33,7 +34,7 @@ export const NFC: NFCPlugin = {
   },
   onWrite: (func: () => void) => {
     let handle: any;
-    NFCPlug.addListener(`nfcWriteSuccess`, func).then((h) => (handle = h));
+    NFCPlug.addListener(`nfcWriteSuccess`, func).then((h: any) => (handle = h));
     return () => {
       try {
         handle?.remove?.();
@@ -44,7 +45,7 @@ export const NFC: NFCPlugin = {
   },
   onError: (errorFn: (error: NFCError) => void) => {
     let handle: any;
-    NFCPlug.addListener(`nfcError`, errorFn).then((h) => (handle = h));
+    NFCPlug.addListener(`nfcError`, errorFn).then((h: any) => (handle = h));
     return () => {
       try {
         handle?.remove?.();
@@ -240,7 +241,7 @@ const mapPayloadTo = <T extends DecodeSpecifier>(type: T, data: NDEFMessages): d
   } as decodedType<T>;
 };
 
-NFCPlug.addListener(`nfcTag`, (data) => {
+NFCPlug.addListener(`nfcTag`, (data: any) => {
   const wrappedData: NDEFMessagesTransformable = {
     base64() {
       return mapPayloadTo('b64', data);

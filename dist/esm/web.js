@@ -1,5 +1,8 @@
-import { WebPlugin } from '@capacitor/core';
-export class NFCWeb extends WebPlugin {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NFCWeb = void 0;
+const core_1 = require("@capacitor/core");
+class NFCWeb extends core_1.WebPlugin {
     async isSupported() {
         return { supported: false };
     }
@@ -16,4 +19,5 @@ export class NFCWeb extends WebPlugin {
         throw new Error('NFC is not supported on web');
     }
 }
+exports.NFCWeb = NFCWeb;
 //# sourceMappingURL=web.js.map

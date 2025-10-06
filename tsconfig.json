@@ -4,9 +4,10 @@
     "declaration": true,
     "esModuleInterop": true,
     "inlineSources": true,
-    "lib": ["dom", "es2017"],
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "lib": ["dom", "dom.iterable", "es2017"],
+    "module": "Node16",
+    // Modern Node-style resolution compatible with TS >=5 (fixes deprecation warning)
+    "moduleResolution": "node16",
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -14,7 +15,11 @@
     "pretty": true,
     "sourceMap": true,
     "strict": true,
-    "target": "es2017"
+    "target": "es2017",
+    // Avoid conflicts between DOM and @types/node AbortSignal declarations
+    "skipLibCheck": true
   },
-  "files": ["src/index.ts"]
+  // (Removed ignoreDeprecations; using supported moduleResolution)
+  // Include all TypeScript sources (index.ts already re-exports definitions)
+  "include": ["src/**/*.ts"]
 }

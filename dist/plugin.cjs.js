@@ -1,5 +1,6 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+'use strict';
+
+var __createBinding = (undefined && undefined.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
     if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
@@ -10,16 +11,16 @@ var __createBinding = (this && this.__createBinding) || (Object.create ? (functi
     if (k2 === undefined) k2 = k;
     o[k2] = m[k];
 }));
-var __exportStar = (this && this.__exportStar) || function(m, exports) {
+var __exportStar = (undefined && undefined.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 var _a, _b;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NFC = void 0;
-const core_1 = require("@capacitor/core");
-const NFCPlug = (0, core_1.registerPlugin)('NFC', {
+const core_1$1 = require("@capacitor/core");
+const NFCPlug = (0, core_1$1.registerPlugin)('NFC', {
     // Explicit .js extension required under node16/nodenext module resolution for emitted ES modules.
-    web: () => import('./web.js').then((m) => new m.NFCWeb()),
+    web: () => Promise.resolve().then(function () { return web; }).then((m) => new m.NFCWeb()),
 });
 __exportStar(require("./definitions"), exports);
 exports.NFC = {
@@ -262,4 +263,30 @@ NFCPlug.addListener(`nfcTag`, (data) => {
         listener(wrappedData);
     }
 });
-//# sourceMappingURL=index.js.map
+
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NFCWeb = void 0;
+const core_1 = require("@capacitor/core");
+class NFCWeb extends core_1.WebPlugin {
+    async isSupported() {
+        return { supported: false };
+    }
+    async startScan() {
+        throw new Error('NFC is not supported on web');
+    }
+    async cancelScan() {
+        throw new Error('NFC is not supported on web');
+    }
+    async cancelWriteAndroid() {
+        throw new Error('NFC is not supported on web');
+    }
+    async writeNDEF() {
+        throw new Error('NFC is not supported on web');
+    }
+}
+exports.NFCWeb = NFCWeb;
+
+var web = /*#__PURE__*/Object.freeze({
+    __proto__: null
+});
+//# sourceMappingURL=plugin.cjs.js.map
