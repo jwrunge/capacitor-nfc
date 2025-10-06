@@ -1,28 +1,11 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __exportStar = (this && this.__exportStar) || function(m, exports) {
-    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
-};
 var _a, _b;
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.NFC = void 0;
-const core_1 = require("@capacitor/core");
-const NFCPlug = (0, core_1.registerPlugin)('NFC', {
+import { registerPlugin } from '@capacitor/core';
+const NFCPlug = registerPlugin('NFC', {
     // Explicit .js extension required under node16/nodenext module resolution for emitted ES modules.
     web: () => import('./web.js').then((m) => new m.NFCWeb()),
 });
-__exportStar(require("./definitions"), exports);
-exports.NFC = {
+export * from './definitions.js';
+export const NFC = {
     isSupported: NFCPlug.isSupported.bind(NFCPlug),
     startScan: NFCPlug.startScan.bind(NFCPlug),
     cancelScan: (_b = (_a = NFCPlug.cancelScan) === null || _a === void 0 ? void 0 : _a.bind(NFCPlug)) !== null && _b !== void 0 ? _b : (async () => {
@@ -30,10 +13,10 @@ exports.NFC = {
     }),
     cancelWriteAndroid: NFCPlug.cancelWriteAndroid.bind(NFCPlug),
     onRead: (func) => {
-        exports.NFC.wrapperListeners.push(func);
+        NFC.wrapperListeners.push(func);
         // Return unsubscribe function
         return () => {
-            exports.NFC.wrapperListeners = exports.NFC.wrapperListeners.filter((l) => l !== func);
+            NFC.wrapperListeners = NFC.wrapperListeners.filter((l) => l !== func);
         };
     },
     onWrite: (func) => {
@@ -63,7 +46,7 @@ exports.NFC = {
         };
     },
     removeAllListeners: (eventName) => {
-        exports.NFC.wrapperListeners = [];
+        NFC.wrapperListeners = [];
         return NFCPlug.removeAllListeners(eventName);
     },
     wrapperListeners: [],
@@ -258,7 +241,7 @@ NFCPlug.addListener(`nfcTag`, (data) => {
             return mapPayloadTo('numberArray', data);
         },
     };
-    for (const listener of exports.NFC.wrapperListeners) {
+    for (const listener of NFC.wrapperListeners) {
         listener(wrappedData);
     }
 });

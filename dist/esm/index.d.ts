@@ -1,3 +1,3 @@
-import type { NFCPlugin } from './definitions';
-export * from './definitions';
+import type { NFCPlugin } from './definitions.js';
+export * from './definitions.js';
 export declare const NFC: NFCPlugin;
