@@ -6,7 +6,6 @@
     "inlineSources": true,
     "lib": ["dom", "dom.iterable", "es2017"],
     "module": "Node16",
-    // Modern Node-style resolution compatible with TS >=5 (fixes deprecation warning)
     "moduleResolution": "node16",
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,
@@ -19,7 +18,5 @@
     // Avoid conflicts between DOM and @types/node AbortSignal declarations
     "skipLibCheck": true
   },
-  // (Removed ignoreDeprecations; using supported moduleResolution)
-  // Include all TypeScript sources (index.ts already re-exports definitions)
   "include": ["src/**/*.ts"]
 }
