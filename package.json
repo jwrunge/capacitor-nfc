@@ -38,7 +38,7 @@
     "fmt": "npm run eslint -- --fix && npm run prettier -- --write && npm run swiftlint -- --fix --format",
     "eslint": "eslint . --ext ts",
     "prettier": "prettier \"**/*.{css,html,ts,js,java}\" --plugin=prettier-plugin-java",
-    "swiftlint": "node-swiftlint",
+    "swiftlint": "node-swiftlint lint ios/Sources/NFCPlugin --config .swiftlint.yml",
     "docgen": "docgen --api NFCPlugin --output-readme README.md --output-json dist/docs.json",
     "build": "npm run clean && tsc && rollup -c rollup.config.js && rimraf *.tgz && npm pack",
     "clean": "rimraf ./dist",

@@ -31,7 +31,8 @@ import Security
                 if let formats = value as? [String] {
                     print("[NFC DEBUG] com.apple.developer.nfc.readersession.formats = \(formats)")
                     if !formats.contains("TAG") {
-                        print("[NFC DEBUG] 'TAG' format missing. NFCTagReaderSession will provide limited functionality. Add 'TAG' to the entitlement or only use NFCNDEFReaderSession if you only need NDEF.")
+                        print("[NFC DEBUG] 'TAG' format missing. NFCTagReaderSession limited.")
+                        print("[NFC DEBUG] Add 'TAG' entitlement or switch to NFCNDEFReaderSession if only NDEF needed.")
                     }
                 } else {
                     print("[NFC DEBUG] NFC formats entitlement present but unexpected type: \(value)")
@@ -74,7 +75,10 @@ import Security
             return
         }
 
-        let tag = tags.first!
+        guard let tag = tags.first else {
+            session.invalidate(errorMessage: "No tag found.")
+            return
+        }
         session.connect(to: tag) { (error: Error?) in
             if let error = error {
                 session.invalidate(errorMessage: "Unable to connect to tag.")
