@@ -1,12 +1,14 @@
 import Foundation
 import CoreNFC
-#if NFC_DEBUG_ENTITLEMENTS && canImport(Security)
+#if canImport(Security)
 import Security
 #endif
 
 @objc public class NFCReader: NSObject, NFCTagReaderSessionDelegate, NFCNDEFReaderSessionDelegate {
     private var readerSession: NFCTagReaderSession?
     private var ndefReaderSession: NFCNDEFReaderSession?
+    private var hasTagEntitlement: Bool? // nil = unknown/not checked
+    private var entitlementChecked = false
 
     public var onNDEFMessageReceived: (([NFCNDEFMessage], [String: Any]?) -> Void)?
     public var onError: ((Error) -> Void)?
@@ -20,6 +22,21 @@ import Security
             print("NFC scanning not supported on this device")
             return
         }
+        // Perform entitlement pre-check once and cache result
+        if !entitlementChecked {
+            hasTagEntitlement = checkTagEntitlement()
+            entitlementChecked = true
+            if let value = hasTagEntitlement {
+                print("[NFC] Pre-check TAG entitlement result: \(value)")
+            }
+        }
+
+        if hasTagEntitlement == false {
+            print("[NFC] Skipping NFCTagReaderSession due to missing TAG entitlement; starting fallback immediately")
+            startFallbackNDEFSession()
+            return
+        }
+
         readerSession = NFCTagReaderSession(pollingOption: [.iso14443, .iso15693, .iso18092], delegate: self, queue: nil)
         readerSession?.alertMessage = "Hold your iPhone near the NFC tag."
         readerSession?.begin()
@@ -35,6 +52,20 @@ import Security
             if !formats.contains("TAG") { print("[NFC DEBUG] 'TAG' missing -> NFCTagReaderSession will fail") }
             if !formats.contains("NDEF") { print("[NFC DEBUG] 'NDEF' missing -> NDEF read/write limited") }
         } else { print("[NFC DEBUG] formats entitlement unexpected type: \(raw)") }
+        #endif
+    }
+
+    private func checkTagEntitlement() -> Bool? {
+        #if canImport(Security) && os(iOS)
+        guard let task = SecTaskCreateFromSelf(nil) else { return nil }
+        let key = "com.apple.developer.nfc.readersession.formats" as CFString
+        guard let raw = SecTaskCopyValueForEntitlement(task, key, nil) else { return nil }
+        if let formats = raw as? [String] {
+            return formats.contains("TAG")
+        }
+        return nil
+        #else
+        return nil
         #endif
     }
 
