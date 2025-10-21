@@ -3,7 +3,7 @@ export class NFCWeb extends WebPlugin {
     async isSupported() {
         return { supported: false };
     }
-    async startScan() {
+    async startScan(_options) {
         throw new Error('NFC is not supported on web');
     }
     async cancelScan() {

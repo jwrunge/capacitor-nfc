@@ -11,7 +11,17 @@ const NFCPlug = core.registerPlugin('NFC', {
 });
 const NFC = {
     isSupported: NFCPlug.isSupported.bind(NFCPlug),
-    startScan: NFCPlug.startScan.bind(NFCPlug),
+    startScan: (options) => {
+        const normalizedOptions = {};
+        if (options) {
+            for (const [key, value] of Object.entries(options)) {
+                if (value !== undefined && value !== null) {
+                    normalizedOptions[key] = value;
+                }
+            }
+        }
+        return NFCPlug.startScan(normalizedOptions);
+    },
     cancelScan: (_b = (_a = NFCPlug.cancelScan) === null || _a === void 0 ? void 0 : _a.bind(NFCPlug)) !== null && _b !== void 0 ? _b : (async () => {
         /* Android no-op */
     }),
@@ -254,7 +264,7 @@ class NFCWeb extends core.WebPlugin {
     async isSupported() {
         return { supported: false };
     }
-    async startScan() {
+    async startScan(_options) {
         throw new Error('NFC is not supported on web');
     }
     async cancelScan() {

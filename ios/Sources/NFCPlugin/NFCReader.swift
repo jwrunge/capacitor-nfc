@@ -1,71 +1,233 @@
 import Foundation
 import CoreNFC
-
+// swiftlint:disable:next type_body_length
 @objc public class NFCReader: NSObject, NFCTagReaderSessionDelegate, NFCNDEFReaderSessionDelegate {
     public func tagReaderSessionDidBecomeActive(_ session: NFCTagReaderSession) {
         // Intentionally left blank; no special handling needed when tag session becomes active.
     }
-    
+    private enum ReaderMode {
+        case fullTag
+        case limitedTag
+        case ndefFallback
+
+        var alertSuffix: String {
+            switch self {
+            case .fullTag:
+                return "."
+            case .limitedTag:
+                return " (compatibility mode)."
+            case .ndefFallback:
+                return " (NDEF mode)."
+            }
+        }
+
+        var metadataValue: String {
+            switch self {
+            case .fullTag:
+                return "full"
+            case .limitedTag:
+                return "compat"
+            case .ndefFallback:
+                return "ndef"
+            }
+        }
+    }
+
     private var readerSession: NFCTagReaderSession?
     private var ndefReaderSession: NFCNDEFReaderSession?
-    private var tagEntitlementMissing = false // set true after entitlement failure
+    private var readerMode: ReaderMode = .fullTag
+    private var autoRestartWorkItem: DispatchWorkItem?
+    private var entitlementFailureDetected = false
+    private var lastFallbackSignature: (mode: ReaderMode, reason: String?)?
 
     public var onNDEFMessageReceived: (([NFCNDEFMessage], [String: Any]?) -> Void)?
     public var onError: ((Error) -> Void)?
 
+    @objc public func setPreferredReaderMode(_ rawMode: String?) {
+        guard let rawMode = rawMode?.lowercased() else { return }
+        switch rawMode {
+        case "full", "advanced", "forcefull":
+            readerMode = .fullTag
+            entitlementFailureDetected = false
+            lastFallbackSignature = nil
+        case "compat", "compatibility", "limited":
+            readerMode = .limitedTag
+            lastFallbackSignature = nil
+        case "ndef":
+            readerMode = .ndefFallback
+            lastFallbackSignature = nil
+        case "auto":
+            if entitlementFailureDetected {
+                if readerMode == .fullTag {
+                    readerMode = .limitedTag
+                }
+            } else {
+                readerMode = .fullTag
+                lastFallbackSignature = nil
+            }
+        default:
+            break
+        }
+        if readerMode == .fullTag {
+            lastFallbackSignature = nil
+        }
+    }
+
     @objc public func startScanning() {
         print("NFCReader startScanning called")
-
-
         guard NFCNDEFReaderSession.readingAvailable else {
             print("NFC scanning not supported on this device")
             return
         }
-        if tagEntitlementMissing {
-            print("[NFC] Previously detected missing TAG entitlement; starting fallback immediately")
-            startFallbackNDEFSession()
-            return
+        if readerMode != .fullTag {
+            let reason = entitlementFailureDetected ? "missing-entitlement" : nil
+            emitFallbackMetadata(for: readerMode, reason: reason)
         }
 
-        readerSession = NFCTagReaderSession(pollingOption: [.iso14443, .iso15693, .iso18092], delegate: self, queue: nil)
-        readerSession?.alertMessage = "Hold your iPhone near the NFC tag."
-        readerSession?.begin()
+        autoRestartWorkItem?.cancel()
+        startCurrentModeSession()
     }
 
     @objc public func cancelScanning() {
+        autoRestartWorkItem?.cancel()
+        autoRestartWorkItem = nil
         if let session = readerSession { session.invalidate() }
         if let ndef = ndefReaderSession { ndef.invalidate() }
         readerSession = nil
         ndefReaderSession = nil
+        lastFallbackSignature = nil
     }
 
     public func tagReaderSession(_ session: NFCTagReaderSession, didInvalidateWithError error: Error) {
         print("NFC reader session error: \(error.localizedDescription)")
-        if let nfcError = error as? NFCReaderError,
-           nfcError.localizedDescription.contains("Missing required entitlement") {
-            tagEntitlementMissing = true
-            print("[NFC] Caching missing TAG entitlement -> future scans use fallback directly")
-            readerSession = nil
-            startFallbackNDEFSession()
+        lastFallbackSignature = nil
+        readerSession = nil
+        guard let nfcError = error as? NFCReaderError else {
+            onError?(error)
             return
         }
+
+        if handleEntitlementOrSystemErrors(nfcError) {
+            return
+        }
+
+        if nfcError.code == .readerSessionInvalidationErrorUserCanceled {
+            return
+        }
+
         onError?(error)
     }
 
-    private func startFallbackNDEFSession() {
+    private func startCurrentModeSession() {
+        switch readerMode {
+        case .fullTag:
+            beginTagSession(pollingOption: [.iso14443, .iso15693, .iso18092])
+        case .limitedTag:
+            beginTagSession(pollingOption: [.iso14443])
+        case .ndefFallback:
+            beginNDEFFallbackSession()
+        }
+    }
+
+    private func beginTagSession(pollingOption: NFCTagReaderSession.PollingOption) {
+        guard NFCTagReaderSession.readingAvailable else {
+            print("[NFC] Tag reading not supported on this device")
+            return
+        }
+        DispatchQueue.main.async {
+            if let existingSession = self.readerSession {
+                existingSession.invalidate()
+            }
+            self.ndefReaderSession?.invalidate()
+            self.ndefReaderSession = nil
+
+            let session = NFCTagReaderSession(pollingOption: pollingOption, delegate: self, queue: nil)
+            session.alertMessage = "Hold your iPhone near the NFC tag" + self.readerMode.alertSuffix
+            self.readerSession = session
+            session.begin()
+        }
+    }
+
+    private func beginNDEFFallbackSession() {
         guard NFCNDEFReaderSession.readingAvailable else { return }
-        // Avoid multiple fallback sessions
-        if ndefReaderSession != nil { return }
-        let session = NFCNDEFReaderSession(delegate: self, queue: nil, invalidateAfterFirstRead: false)
-        session.alertMessage = "Hold your iPhone near the NFC tag. (NDEF mode)"
-        ndefReaderSession = session
-        session.begin()
+        DispatchQueue.main.async {
+            if self.ndefReaderSession != nil { return }
+            let session = NFCNDEFReaderSession(delegate: self, queue: nil, invalidateAfterFirstRead: false)
+            session.alertMessage = "Hold your iPhone near the NFC tag. (NDEF mode)"
+            self.ndefReaderSession = session
+            session.begin()
+        }
+    }
+
+    private func scheduleRestart(after delay: TimeInterval = 0.25) {
+        autoRestartWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            self.autoRestartWorkItem = nil
+            self.startCurrentModeSession()
+        }
+        autoRestartWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private func emitFallbackMetadata(for mode: ReaderMode, reason: String? = nil) {
+        guard mode != .fullTag else { return }
+        if let last = lastFallbackSignature, last.mode == mode, last.reason == reason {
+            return
+        }
+        lastFallbackSignature = (mode, reason)
+
+        var metadata: [String: Any] = [
+            "fallback": true,
+            "fallbackMode": mode.metadataValue
+        ]
+        if let reason = reason {
+            metadata["reason"] = reason
+        }
+        DispatchQueue.main.async {
+            self.onNDEFMessageReceived?([], metadata)
+        }
+    }
+
+    private func handleEntitlementOrSystemErrors(_ error: NFCReaderError) -> Bool {
+        let description = error.localizedDescription.lowercased()
+
+        if description.contains("missing required entitlement") || error.code == .readerErrorSecurityViolation {
+            if readerMode == .fullTag {
+                print("[NFC] Missing advanced tag entitlement detected -> switching to compatibility mode")
+                readerMode = .limitedTag
+                entitlementFailureDetected = true
+                emitFallbackMetadata(for: readerMode, reason: "missing-entitlement")
+                scheduleRestart()
+                return true
+            }
+
+            if readerMode == .limitedTag {
+                print("[NFC] Compatibility mode also unavailable -> falling back to NDEF session")
+                readerMode = .ndefFallback
+                entitlementFailureDetected = true
+                emitFallbackMetadata(for: readerMode, reason: "missing-entitlement")
+                scheduleRestart()
+                return true
+            }
+        }
+
+        if description.contains("system resource unavailable") || error.code == .readerSessionInvalidationErrorSystemIsBusy {
+            print("[NFC] System resource unavailable; retrying current reader mode")
+            scheduleRestart(after: 0.35)
+            return true
+        }
+
+        return false
     }
 
     // MARK: - NFCNDEFReaderSessionDelegate
     public func readerSession(_ session: NFCNDEFReaderSession, didInvalidateWithError error: Error) {
         print("NDEF reader session error: \(error.localizedDescription)")
-        if (session === ndefReaderSession) { ndefReaderSession = nil }
+        if session === ndefReaderSession {
+            ndefReaderSession = nil
+            lastFallbackSignature = nil
+        }
         onError?(error)
     }
 
@@ -74,8 +236,8 @@ import CoreNFC
         let isFallback = (session === ndefReaderSession)
         print("NDEF reader session became active (fallback mode: \(isFallback))")
         if isFallback {
-            // Emit an empty message set with a fallback flag so JS layer can distinguish mode immediately.
-            onNDEFMessageReceived?([], ["fallback": true])
+            let reason = entitlementFailureDetected ? "missing-entitlement" : nil
+            emitFallbackMetadata(for: .ndefFallback, reason: reason)
         }
     }
 

@@ -5,6 +5,7 @@ import type {
   NDEFWriteOptions,
   NFCPlugin,
   NFCPluginBasic,
+  StartScanOptions,
   PayloadType,
   TagResultListenerFunc,
   NFCError,
@@ -18,7 +19,17 @@ const NFCPlug = registerPlugin<NFCPluginBasic>('NFC', {
 export * from './definitions.js';
 export const NFC: NFCPlugin = {
   isSupported: NFCPlug.isSupported.bind(NFCPlug),
-  startScan: NFCPlug.startScan.bind(NFCPlug),
+  startScan: (options?: StartScanOptions) => {
+    const normalizedOptions: Record<string, unknown> = {};
+    if (options) {
+      for (const [key, value] of Object.entries(options)) {
+        if (value !== undefined && value !== null) {
+          normalizedOptions[key] = value;
+        }
+      }
+    }
+    return NFCPlug.startScan(normalizedOptions);
+  },
   cancelScan:
     NFCPlug.cancelScan?.bind(NFCPlug) ??
     (async () => {

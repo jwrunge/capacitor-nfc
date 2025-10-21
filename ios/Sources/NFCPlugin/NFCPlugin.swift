@@ -27,6 +27,15 @@ public class NFCPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func startScan(_ call: CAPPluginCall) {
         print("startScan called")
+        if let preferredMode = call.getString("mode") {
+            reader.setPreferredReaderMode(preferredMode)
+        } else if call.getBool("forceFull") == true {
+            reader.setPreferredReaderMode("full")
+        } else if call.getBool("forceCompat") == true {
+            reader.setPreferredReaderMode("compat")
+        } else if call.getBool("forceNDEF") == true {
+            reader.setPreferredReaderMode("ndef")
+        }
         reader.onNDEFMessageReceived = { messages, tagInfo in
             var ndefMessages = [[String: Any]]()
 
