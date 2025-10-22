@@ -7,5 +7,5 @@ export declare class NFCWeb extends WebPlugin {
     startScan(_options?: StartScanOptions): Promise<void>;
     cancelScan(): Promise<void>;
     cancelWriteAndroid(): Promise<void>;
-    writeNDEF(): Promise<void>;
+    writeNDEF(_options?: any): Promise<void>;
 }

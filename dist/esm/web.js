@@ -12,7 +12,7 @@ export class NFCWeb extends WebPlugin {
     async cancelWriteAndroid() {
         throw new Error('NFC is not supported on web');
     }
-    async writeNDEF() {
+    async writeNDEF(_options) {
         throw new Error('NFC is not supported on web');
     }
 }

@@ -80,20 +80,27 @@ const NFC = {
         const recordsArray = (_a = options === null || options === void 0 ? void 0 : options.records) !== null && _a !== void 0 ? _a : [];
         if (recordsArray.length === 0)
             throw new Error('At least one NDEF record is required');
+        const isRawMode = (options === null || options === void 0 ? void 0 : options.rawMode) === true;
         const ndefMessage = {
             records: recordsArray.map((record) => {
                 let payload = null;
                 if (typeof record.payload === 'string') {
-                    // Apply spec-compliant formatting only for Well Known Text (T) & URI (U) types.
-                    if (record.type === 'T') {
-                        payload = buildTextPayload(record.payload);
-                    }
-                    else if (record.type === 'U') {
-                        payload = buildUriPayload(record.payload);
+                    if (isRawMode) {
+                        // Raw mode: write string payloads as UTF-8 bytes without any framing
+                        payload = Array.from(new TextEncoder().encode(record.payload));
                     }
                     else {
-                        // Generic string: raw UTF-8 bytes (no extra framing)
-                        payload = Array.from(new TextEncoder().encode(record.payload));
+                        // Apply spec-compliant formatting only for Well Known Text (T) & URI (U) types.
+                        if (record.type === 'T') {
+                            payload = buildTextPayload(record.payload);
+                        }
+                        else if (record.type === 'U') {
+                            payload = buildUriPayload(record.payload);
+                        }
+                        else {
+                            // Generic string: raw UTF-8 bytes (no extra framing)
+                            payload = Array.from(new TextEncoder().encode(record.payload));
+                        }
                     }
                 }
                 else if (Array.isArray(record.payload)) {
@@ -273,7 +280,7 @@ class NFCWeb extends core.WebPlugin {
     async cancelWriteAndroid() {
         throw new Error('NFC is not supported on web');
     }
-    async writeNDEF() {
+    async writeNDEF(_options) {
         throw new Error('NFC is not supported on web');
     }
 }

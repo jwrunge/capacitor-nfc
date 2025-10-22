@@ -157,6 +157,11 @@ export interface NFCError {
 
 export interface NDEFWriteOptions<T extends PayloadType = Uint8Array> {
   records: NDEFRecord<T>[];
+  /**
+   * When true, bypasses automatic Well Known Type formatting (Text 'T' and URI 'U' prefixes).
+   * All payloads are written as raw bytes without additional framing.
+   */
+  rawMode?: boolean;
 }
 
 export type NDEFMessagesTransformable = {

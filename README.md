@@ -179,6 +179,21 @@ const message: NDEFWriteOptions = {
   ],
 };
 
+// For complete control over binary content, use raw mode:
+const rawMessage: NDEFWriteOptions = {
+  rawMode: true, // Bypasses automatic Text/URI formatting
+  records: [
+    {
+      type: 'T',
+      payload: 'Hello, NFC!', // Written as UTF-8 bytes without Text record prefix
+    },
+    {
+      type: 'custom',
+      payload: new Uint8Array([0x01, 0x02, 0x03, 0x04]), // Exact bytes written to tag
+    },
+  ],
+};
+
 // Write NDEF message to NFC tag
 NFC.writeNDEF(message)
   .then(() => {
@@ -265,6 +280,8 @@ Automatic formatting rules (to aid interoperability):
 - URI (`type: 'U'` + string payload): encoded as `[0x00][UTF-8 URI bytes]` (prefix compression not yet applied).
 - Any other `type` + string payload: UTF-8 bytes only (no extra framing).
 - `Uint8Array` or `number[]` payloads are treated as raw bytes and written verbatim (never altered).
+
+**Raw Mode**: Set `rawMode: true` to bypass automatic Well Known Type formatting entirely. All string payloads will be written as UTF-8 bytes without Text ('T') or URI ('U') prefixes, giving you complete control over the binary content.
 
 If you need full manual control of a Text or URI record, supply raw bytes (number[] / Uint8Array) and the plugin will not modify them.
 
@@ -361,6 +378,11 @@ Options for writing an NDEF message.
 ```typescript
 interface NDEFWriteOptions<T extends string | number[] | Uint8Array = string> {
   records: NDEFRecord<T>[];
+  /**
+   * When true, bypasses automatic Well Known Type formatting (Text 'T' and URI 'U' prefixes).
+   * All payloads are written as raw bytes without additional framing.
+   */
+  rawMode?: boolean;
 }
 ```
 

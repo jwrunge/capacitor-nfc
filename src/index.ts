@@ -87,19 +87,26 @@ export const NFC: NFCPlugin = {
     const recordsArray = options?.records ?? [];
     if (recordsArray.length === 0) throw new Error('At least one NDEF record is required');
 
+    const isRawMode = options?.rawMode === true;
+
     const ndefMessage: NDEFWriteOptions<number[]> = {
       records: recordsArray.map((record: any) => {
         let payload: number[] | null = null;
 
         if (typeof record.payload === 'string') {
-          // Apply spec-compliant formatting only for Well Known Text (T) & URI (U) types.
-          if (record.type === 'T') {
-            payload = buildTextPayload(record.payload);
-          } else if (record.type === 'U') {
-            payload = buildUriPayload(record.payload);
-          } else {
-            // Generic string: raw UTF-8 bytes (no extra framing)
+          if (isRawMode) {
+            // Raw mode: write string payloads as UTF-8 bytes without any framing
             payload = Array.from(new TextEncoder().encode(record.payload));
+          } else {
+            // Apply spec-compliant formatting only for Well Known Text (T) & URI (U) types.
+            if (record.type === 'T') {
+              payload = buildTextPayload(record.payload);
+            } else if (record.type === 'U') {
+              payload = buildUriPayload(record.payload);
+            } else {
+              // Generic string: raw UTF-8 bytes (no extra framing)
+              payload = Array.from(new TextEncoder().encode(record.payload));
+            }
           }
         } else if (Array.isArray(record.payload)) {
           // Assume already raw bytes; do NOT modify

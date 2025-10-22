@@ -19,7 +19,7 @@ export class NFCWeb extends WebPlugin {
     throw new Error('NFC is not supported on web');
   }
 
-  async writeNDEF(): Promise<void> {
+  async writeNDEF(_options?: any): Promise<void> {
     throw new Error('NFC is not supported on web');
   }
 }
