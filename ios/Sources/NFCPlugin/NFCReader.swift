@@ -141,7 +141,10 @@ import CoreNFC
             self.ndefReaderSession?.invalidate()
             self.ndefReaderSession = nil
 
-            let session = NFCTagReaderSession(pollingOption: pollingOption, delegate: self, queue: nil)
+            guard let session = NFCTagReaderSession(pollingOption: pollingOption, delegate: self, queue: nil) else {
+                print("[NFC] Failed to create NFCTagReaderSession (nil).")
+                return
+            }
             session.alertMessage = "Hold your iPhone near the NFC tag" + self.readerMode.alertSuffix
             self.readerSession = session
             session.begin()
