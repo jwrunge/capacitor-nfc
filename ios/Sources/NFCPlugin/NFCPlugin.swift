@@ -105,8 +105,7 @@ public class NFCPlugin: CAPPlugin, CAPBridgedPlugin {
         var ndefRecords = [NFCNDEFPayload]()
         for recordData in recordsData {
             guard let type = recordData["type"] as? String,
-                let payload = recordData["payload"] as? [NSNumber],
-                let typeData = type.data(using: .utf8)
+                let payload = recordData["payload"] as? [NSNumber]
             else {
                 print("Skipping record due to missing or invalid record")
                 continue
@@ -123,8 +122,26 @@ public class NFCPlugin: CAPPlugin, CAPBridgedPlugin {
             }
             let payloadData = Data(payloadBytes)
 
+            let format: NFCTypeNameFormat
+            let typeEncoding: String.Encoding
+            if type == "T" || type == "U" {
+                format = .nfcWellKnown
+                typeEncoding = .utf8
+            } else if type.contains("/") {
+                format = .media
+                typeEncoding = .ascii
+            } else {
+                format = .nfcExternal
+                typeEncoding = .utf8
+            }
+
+            guard let typeData = type.data(using: typeEncoding) else {
+                print("Skipping record due to unsupported type encoding")
+                continue
+            }
+
             let ndefRecord = NFCNDEFPayload(
-                format: .nfcWellKnown,
+                format: format,
                 type: typeData,
                 identifier: Data(),
                 payload: payloadData
